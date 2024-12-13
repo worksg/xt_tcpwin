@@ -4,6 +4,7 @@ obj-m += xt_TCPWIN.o
 
 else
 
+KVERSION := $(shell uname -r)
 KDIR	:= /lib/modules/$(shell uname -r)/build
 PWD	:= $(shell pwd)
 CFLAGS = -O3 -Wall
@@ -19,7 +20,7 @@ modules:
 	$(MAKE) -C $(KDIR) M=$(PWD) modules
 
 lib%.so: lib%.o
-	gcc -shared -fPIC -o $@ $^;
+	gcc -shared -fPIC ${CFLAGS} -lxtables -o $@ $^;
 
 lib%.o: lib%.c
 	gcc ${CFLAGS} -D_INIT=lib$*_init -fPIC -c -o $@ $<;
@@ -29,9 +30,9 @@ clean:
 	rm -f *.{o,so}
 
 install: all
-	install -m 0644 libxt_TCPWIN.so $(XTABLES_LIBDIR)/
 	-rmmod xt_TCPWIN
-	insmod xt_TCPWIN.ko
-	#install -m 0644 xt_TCPWIN.ko /lib/modules/$(KVERSION)/kernel/net/netfilter/
+	install -m 0644 libxt_TCPWIN.so $(XTABLES_LIBDIR)/
+	install -m 0644 xt_TCPWIN.ko /lib/modules/$(KVERSION)/kernel/net/netfilter/
+	depmod
 
 endif

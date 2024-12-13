@@ -29,7 +29,10 @@ MODULE_LICENSE("GPL");
 static unsigned int
 twin_tg(struct sk_buff *skb, const struct xt_action_param *par)
 {
-	struct tcphdr *tcph, tcpbuf;
+	struct iphdr *iph = ip_hdr(skb);
+	struct tcphdr *tcph;
+	int len, tcp_hdrlen;
+	unsigned int tcphoff = iph->ihl * 4;
 	__u32 win;
 	const struct ipt_TWIN_info *info = par->targinfo;
 	enum ip_conntrack_info ctinfo;
@@ -37,21 +40,24 @@ twin_tg(struct sk_buff *skb, const struct xt_action_param *par)
 	struct ip_ct_tcp *tcpinfo;
 
 	/* This is a fragment, no TCP header is available */
-	if (unlikely(par->fragoff != 0))
+	if (par->fragoff != 0)
 		return XT_CONTINUE;
 
-#if LINUX_VERSION_CODE >= KERNEL_VERSION(3, 19, 0)
-	if (skb_ensure_writable(skb, par->thoff + sizeof(struct tcphdr)))
-#else
-	if (!skb_make_writable(skb, par->thoff + sizeof(struct tcphdr)))
-#endif
-		return XT_CONTINUE;
+	if (skb_ensure_writable(skb, skb->len))
+		return NF_DROP;
 
-	tcph = skb_header_pointer(skb, par->thoff, sizeof(struct tcphdr), &tcpbuf);
-	if (tcph == NULL)
-		return XT_CONTINUE;
+	len = skb->len - tcphoff;
+	if (len < (int)sizeof(struct tcphdr))
+		return NF_DROP;
+
+	tcph = (struct tcphdr *)(skb_network_header(skb) + tcphoff);
+	tcp_hdrlen = tcph->doff * 4;
+
+	if (len < tcp_hdrlen || tcp_hdrlen < sizeof(struct tcphdr))
+		return NF_DROP;
 
 	win = info->win;
+
 	if (!tcph->syn && info->wscale) {
 		ct = nf_ct_get(skb, &ctinfo);
 		tcpinfo = &ct->proto.tcp;
@@ -67,8 +73,8 @@ twin_tg(struct sk_buff *skb, const struct xt_action_param *par)
 	else
 		win = htons(win);
 
-	csum_replace2(&tcph->check, tcph->window, (__be16)win);
 	tcph->window = win;
+	csum_replace2(&tcph->check, tcph->window, win);
 
 	return XT_CONTINUE;
 }

@@ -62,6 +62,8 @@ static struct xtables_target twin_tg_reg = {
 	.x6_options	= TWIN_opts,
 };
 
+// void xt_init(void) __attribute__((constructor));
+// void xt_init(void) { ... }
 static void __attribute__((constructor)) IPTABLES_MODULE_MAIN(void)
 {
 	xtables_register_target(&twin_tg_reg);
